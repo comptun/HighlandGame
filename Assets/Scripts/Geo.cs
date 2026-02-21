@@ -4,8 +4,16 @@ using System.IO;
 using System.Runtime.CompilerServices;
 using UnityEngine;
 
+[System.Serializable]
+public class SerializableList<T>
+{
+    public List<T> list;
+}
+
 public class Geo : MonoBehaviour
 {
+
+    [SerializeField] private SerializableList<float> globalHeights;
 
     [Header("Grid")]
     public int width = 200;   // x dimension
@@ -22,11 +30,18 @@ public class Geo : MonoBehaviour
     void Start()
     {
         int index = 0;
-        for (int i = 42; i < 50; i++)
+        for (int i = 28; i < 39; i++)
         {
-            NewGeoMesh("tq/TQ" + i.ToString() + ".asc", index);
+            NewGeoMesh("nd/ND" + i.ToString() + ".asc", index);
             index += 1;
         }
+
+        //List<string> Citations = ReadCitationsFile();
+        //print(Citations.Count);
+        //for (int i = 0; i < Citations.Count; i++)
+        //{
+
+        //}
     }
 
     // Update is called once per frame
@@ -35,20 +50,49 @@ public class Geo : MonoBehaviour
 
     }
 
-    void NewGeoMesh(string name, int index)
+    List<string> ReadCitationsFile()
+    {
+        string path = Application.streamingAssetsPath + "/GeoData/citations.txt";
+
+        string text = File.ReadAllText(path);
+
+        // split by whitespace (space, newline, tab etc.)
+        string[] tokens = text.Split(",", System.StringSplitOptions.RemoveEmptyEntries);
+
+        return new List<string>(tokens);
+    }
+
+    List<float> GetHeights(string name)
     {
         string fileName = "/GeoData/Data/" + name;
 
-        List<string> words = ReadWords(fileName);
+        List<string> words = ReadHeightFile(fileName);
         List<float> heights = new List<float>();
+
+        int xCorner = int.Parse(words[5]);
+        int yCorner = int.Parse(words[7]);
 
         for (int i = 10; i < words.Count; i++)
             heights.Add(float.Parse(words[i]));
 
-        print(heights.Count);
+        return heights;
+    }
 
+    List<string> ReadHeightFile(string fileName)
+    {
+        string path = Application.streamingAssetsPath + fileName;
 
+        string text = File.ReadAllText(path);
 
+        // split by whitespace (space, newline, tab etc.)
+        string[] tokens = text.Split((char[])null, System.StringSplitOptions.RemoveEmptyEntries);
+
+        return new List<string>(tokens);
+    }
+
+    void NewGeoMesh(string name, int index)
+    {
+        List<float> heights = GetHeights(name);
 
         int vertCount = width * height;
         Vector3[] verts = new Vector3[vertCount];
@@ -115,18 +159,5 @@ public class Geo : MonoBehaviour
         GameObject newGeo = Instantiate(geoObject);
         newGeo.GetComponent<MeshFilter>().sharedMesh = mesh;
         newGeo.transform.position = new Vector3(0,0,-index * cellSize * (height));
-    }
-
-    List<string> ReadWords(string fileName)
-    {
-        print(Application.streamingAssetsPath);
-        string path = Application.streamingAssetsPath + fileName;
-
-        string text = File.ReadAllText(path);
-
-        // split by whitespace (space, newline, tab etc.)
-        string[] tokens = text.Split((char[])null, System.StringSplitOptions.RemoveEmptyEntries);
-
-        return new List<string>(tokens);
     }
 }
