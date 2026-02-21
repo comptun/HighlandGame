@@ -5,16 +5,38 @@ using System.Runtime.CompilerServices;
 using UnityEngine;
 
 [System.Serializable]
-public class SerializableList<T>
+public class SerializableDictionary<TKey, TValue> : ISerializationCallbackReceiver
 {
-    public List<T> list;
+    [SerializeField] private List<TKey> keys = new();
+    [SerializeField] private List<TValue> values = new();
+
+    private Dictionary<TKey, TValue> dictionary = new();
+
+    public Dictionary<TKey, TValue> Dictionary => dictionary;
+
+    public void OnBeforeSerialize()
+    {
+        keys.Clear();
+        values.Clear();
+
+        foreach (var kvp in dictionary)
+        {
+            keys.Add(kvp.Key);
+            values.Add(kvp.Value);
+        }
+    }
+
+    public void OnAfterDeserialize()
+    {
+        dictionary = new Dictionary<TKey, TValue>();
+
+        for (int i = 0; i < Mathf.Min(keys.Count, values.Count); i++)
+            dictionary[keys[i]] = values[i];
+    }
 }
 
 public class Geo : MonoBehaviour
 {
-
-    [SerializeField] private SerializableList<float> globalHeights;
-
     [Header("Grid")]
     public int width = 200;   // x dimension
     public int height = 200;  // z dimension
@@ -26,22 +48,43 @@ public class Geo : MonoBehaviour
 
     public GameObject geoObject;
 
+    [SerializeField]
+    private SerializableDictionary<(int x, int y), List<float>> grid = new SerializableDictionary<(int, int), List<float>>();
+
     // Start is called before the first frame update
     void Start()
     {
-        int index = 0;
-        for (int i = 28; i < 39; i++)
+
+        List<string> Citations = ReadCitationsFile();
+        print(Citations.Count);
+        for (int i = 0; i < Citations.Count; i++)
         {
-            NewGeoMesh("nd/ND" + i.ToString() + ".asc", index);
-            index += 1;
+            char[] charsStart = { Citations[i][0], Citations[i][1] };
+            string start = new string(charsStart);
+
+            char[] charsEnd = { Citations[i][2], Citations[i][3] };
+            string end = new string(charsEnd);
+
+            string fileName = "/GeoData/Data/" + start + "/" + start.ToUpper() + end + ".asc";
+
+            print(fileName);
+
+            List<string> words = ReadHeightFile(fileName);
+            List<float> heights = new List<float>();
+
+            int xCorner = int.Parse(words[5]);
+            int yCorner = int.Parse(words[7]);
+
+            for (int j = 10; j < words.Count; j++)
+                heights.Add(float.Parse(words[j]));
+
+            grid.Dictionary[(xCorner, yCorner)] = heights;
         }
 
-        //List<string> Citations = ReadCitationsFile();
-        //print(Citations.Count);
-        //for (int i = 0; i < Citations.Count; i++)
-        //{
+        string json = JsonUtility.ToJson(grid);
+        File.WriteAllText(Application.streamingAssetsPath + "/Grid/Data.json", json);
 
-        //}
+        print("Done");
     }
 
     // Update is called once per frame
