@@ -1,18 +1,18 @@
+using JetBrains.Annotations;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Runtime.CompilerServices;
 using UnityEngine;
 
-[System.Serializable]
+[Serializable]
 public class SerializableDictionary<TKey, TValue> : ISerializationCallbackReceiver
 {
     [SerializeField] private List<TKey> keys = new();
     [SerializeField] private List<TValue> values = new();
 
-    private Dictionary<TKey, TValue> dictionary = new();
-
-    public Dictionary<TKey, TValue> Dictionary => dictionary;
+    public Dictionary<TKey, TValue> dictionary = new();
 
     public void OnBeforeSerialize()
     {
@@ -35,6 +35,9 @@ public class SerializableDictionary<TKey, TValue> : ISerializationCallbackReceiv
     }
 }
 
+[Serializable]
+public class StringFloatDictionary : SerializableDictionary<string, string> {}
+
 public class Geo : MonoBehaviour
 {
     [Header("Grid")]
@@ -49,42 +52,53 @@ public class Geo : MonoBehaviour
     public GameObject geoObject;
 
     [SerializeField]
-    private SerializableDictionary<(int x, int y), List<float>> grid = new SerializableDictionary<(int, int), List<float>>();
+    private StringFloatDictionary grid = new StringFloatDictionary();
+
+    [SerializeField]
+    private Vector2Int worldCentre = new Vector2Int(44,120);
 
     // Start is called before the first frame update
     void Start()
     {
 
-        List<string> Citations = ReadCitationsFile();
-        print(Citations.Count);
-        for (int i = 0; i < Citations.Count; i++)
-        {
-            char[] charsStart = { Citations[i][0], Citations[i][1] };
-            string start = new string(charsStart);
+        //List<string> Citations = ReadCitationsFile();
+        //print(Citations.Count);
+        //for (int i = 0; i < Citations.Count; i++)
+        //{
+        //    char[] charsStart = { Citations[i][0], Citations[i][1] };
+        //    string start = new string(charsStart);
 
-            char[] charsEnd = { Citations[i][2], Citations[i][3] };
-            string end = new string(charsEnd);
+        //    char[] charsEnd = { Citations[i][2], Citations[i][3] };
+        //    string end = new string(charsEnd);
 
-            string fileName = "/GeoData/Data/" + start + "/" + start.ToUpper() + end + ".asc";
+        //    string fileName = "/GeoData/Data/" + start + "/" + start.ToUpper() + end + ".asc";
 
-            print(fileName);
+        //    print(fileName);
 
-            List<string> words = ReadHeightFile(fileName);
-            List<float> heights = new List<float>();
+        //    List<string> words = ReadHeightFile(fileName);
+        //    List<float> heights = new List<float>();
 
-            int xCorner = int.Parse(words[5]);
-            int yCorner = int.Parse(words[7]);
+        //    int xCorner = int.Parse(words[5]);
+        //    int yCorner = int.Parse(words[7]);
 
-            for (int j = 10; j < words.Count; j++)
-                heights.Add(float.Parse(words[j]));
+        //    for (int j = 10; j < words.Count; j++)
+        //        heights.Add(float.Parse(words[j]));
 
-            grid.Dictionary[(xCorner, yCorner)] = heights;
-        }
+        //    grid.dictionary[(xCorner / 10000).ToString() + "," + (yCorner / 10000).ToString()] = start + end;
+        //}
 
-        string json = JsonUtility.ToJson(grid);
-        File.WriteAllText(Application.streamingAssetsPath + "/Grid/Data.json", json);
+        ////grid.OnBeforeSerialize();
+        //string json = JsonUtility.ToJson(grid);
+        //print(json);
+        //File.WriteAllText(Application.streamingAssetsPath + "/Grid/Data.json", json);
 
-        print("Done");
+        //print("Done");
+
+        grid = JsonUtility.FromJson<StringFloatDictionary>(File.ReadAllText(Application.streamingAssetsPath + "/Grid/Data.json"));
+
+        print(grid.dictionary.Count);
+
+        GenerateTerrainSpiral(new Vector2Int(0, 0), 40);
     }
 
     // Update is called once per frame
@@ -107,9 +121,14 @@ public class Geo : MonoBehaviour
 
     List<float> GetHeights(string name)
     {
-        string fileName = "/GeoData/Data/" + name;
+        string fileName = Application.streamingAssetsPath + "/GeoData/Data/" + name;
 
-        List<string> words = ReadHeightFile(fileName);
+        string text = File.ReadAllText(fileName);
+
+        // split by whitespace (space, newline, tab etc.)
+        string[] tokens = text.Split((char[])null, System.StringSplitOptions.RemoveEmptyEntries);
+
+        List<string> words = new List<string>(tokens);
         List<float> heights = new List<float>();
 
         int xCorner = int.Parse(words[5]);
@@ -121,20 +140,44 @@ public class Geo : MonoBehaviour
         return heights;
     }
 
-    List<string> ReadHeightFile(string fileName)
+    string GetFileNameFromPos(Vector2Int pos)
     {
-        string path = Application.streamingAssetsPath + fileName;
+        pos += worldCentre;
+        string key = pos.x.ToString() + "," + pos.y.ToString();
+        if (!grid.dictionary.ContainsKey(key))
+        {
+            return "KeyNotFound";
+        }
+        string name = grid.dictionary[key];
 
-        string text = File.ReadAllText(path);
+        char[] charsStart = { name[0], name[1] };
+        string start = new string(charsStart);
 
-        // split by whitespace (space, newline, tab etc.)
-        string[] tokens = text.Split((char[])null, System.StringSplitOptions.RemoveEmptyEntries);
+        char[] charsEnd = { name[2], name[3] };
+        string end = new string(charsEnd);
 
-        return new List<string>(tokens);
+        string fileName = start + "/" + start.ToUpper() + end + ".asc";
+
+        return fileName;
     }
 
-    void NewGeoMesh(string name, int index)
+    void GenerateTerrainSpiral(Vector2Int pos, int radius)
     {
+        foreach (var p in Spiral.PointsInRadius(radius))
+        {
+            NewGeoMesh(p + pos);
+        }
+    }
+
+    void NewGeoMesh(Vector2Int pos)
+    {
+        string name = GetFileNameFromPos(pos);
+
+        if (name == "KeyNotFound")
+        {
+            return;
+        }
+
         List<float> heights = GetHeights(name);
 
         int vertCount = width * height;
@@ -201,6 +244,7 @@ public class Geo : MonoBehaviour
 
         GameObject newGeo = Instantiate(geoObject);
         newGeo.GetComponent<MeshFilter>().sharedMesh = mesh;
-        newGeo.transform.position = new Vector3(0,0,-index * cellSize * (height));
+        newGeo.transform.position = new Vector3(-pos.x * 10000,0, -pos.y * 10000);
+        newGeo.transform.localScale = new Vector3(-1, 1, 1);
     }
 }
